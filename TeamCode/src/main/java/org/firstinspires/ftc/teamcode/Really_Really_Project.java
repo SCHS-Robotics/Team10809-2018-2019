@@ -70,7 +70,7 @@ public class Really_Really_Project extends LinearOpMode {
         // Initialize the hardware variables. Note that the strings used here as parameters
         // to 'get' must correspond to the names assigned during the robot configuration
         // step (using the FTC Robot Controller app on the phone).
-        motor1  = hardwareMap.get(DcMotor.class, "backL");
+        motor1 = hardwareMap.get(DcMotor.class, "backL");
         motor2 = hardwareMap.get(DcMotor.class, "backR");
         motor2 = hardwareMap.get(DcMotor.class, "frontL");
         motor2 = hardwareMap.get(DcMotor.class, "frontR");
