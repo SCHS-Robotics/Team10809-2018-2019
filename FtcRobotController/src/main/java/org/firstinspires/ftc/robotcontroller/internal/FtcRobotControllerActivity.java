@@ -45,11 +45,14 @@ import android.hardware.usb.UsbManager;
 import android.net.wifi.WifiManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
 import android.os.IBinder;
+import android.os.Message;
 import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.annotation.Nullable;
 import android.support.annotation.StringRes;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.MotionEvent;
@@ -59,7 +62,11 @@ import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
 import android.widget.TextView;
-
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.JavaCameraView;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
 import com.google.blocks.ftcrobotcontroller.BlocksActivity;
 import com.google.blocks.ftcrobotcontroller.ProgrammingModeActivity;
 import com.google.blocks.ftcrobotcontroller.ProgrammingModeControllerImpl;
@@ -137,6 +144,7 @@ public class FtcRobotControllerActivity extends Activity
   protected ProgrammingWebHandlers programmingWebHandlers;
   protected ProgrammingModeController programmingModeController;
 
+  public static JavaCameraView mOpenCvCameraView;
   protected UpdateUI.Callback callback;
   protected Context context;
   protected Utility utility;
@@ -174,7 +182,22 @@ public class FtcRobotControllerActivity extends Activity
     }
 
   }
-
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+      @Override
+      public void onManagerConnected(int status) {
+        switch (status) {
+          case LoaderCallbackInterface.SUCCESS: {
+            Log.i(TAG, "OpenCV loaded successfully");
+            mOpenCvCameraView.enableView();
+          }
+          break;
+          default: {
+            super.onManagerConnected(status);
+          }
+          break;
+        }
+      }
+    };
   protected ServiceConnection connection = new ServiceConnection() {
     @Override
     public void onServiceConnected(ComponentName name, IBinder service) {
@@ -264,7 +287,7 @@ public class FtcRobotControllerActivity extends Activity
     eventLoop = null;
 
     setContentView(R.layout.activity_ftc_controller);
-
+    mOpenCvCameraView = (JavaCameraView) findViewById(R.id.cameraView);
     preferencesHelper = new PreferencesHelper(TAG, context);
     preferencesHelper.writeBooleanPrefIfDifferent(context.getString(R.string.pref_rc_connected), true);
     preferencesHelper.getSharedPreferences().registerOnSharedPreferenceChangeListener(sharedPreferencesListener);
@@ -378,6 +401,13 @@ public class FtcRobotControllerActivity extends Activity
   protected void onResume() {
     super.onResume();
     RobotLog.vv(TAG, "onResume()");
+    if (!OpenCVLoader.initDebug()) {
+      Log.d(TAG, "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+      OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_2_0, this, mLoaderCallback);
+    } else {
+      Log.d(TAG, "OpenCV library found inside package. Using it!");
+      mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+    }
   }
 
   @Override
@@ -387,6 +417,8 @@ public class FtcRobotControllerActivity extends Activity
     if (programmingModeController.isActive()) {
       programmingModeController.stopProgrammingMode();
     }
+    if (mOpenCvCameraView != null)
+      mOpenCvCameraView.disableView();
   }
 
   @Override
@@ -415,6 +447,8 @@ public class FtcRobotControllerActivity extends Activity
 
     preferencesHelper.getSharedPreferences().unregisterOnSharedPreferenceChangeListener(sharedPreferencesListener);
     RobotLog.cancelWriteLogcatToDisk();
+    if (mOpenCvCameraView != null)
+      mOpenCvCameraView.disableView();
   }
 
   protected void bindToService() {
@@ -465,7 +499,24 @@ public class FtcRobotControllerActivity extends Activity
     // update the app_settings
     preferencesHelper.writeStringPrefIfDifferent(context.getString(R.string.pref_pairing_kind), networkType.toString());
   }
+    public final static Handler turnOnCameraView = new Handler() {
+      @Override
+      public void handleMessage(Message msg) {
+        if (mOpenCvCameraView.isEnabled())
+          mOpenCvCameraView.disableView();
+        mOpenCvCameraView.setVisibility(View.VISIBLE);
+        mOpenCvCameraView.setCvCameraViewListener((CameraBridgeViewBase.CvCameraViewListener2) msg.obj);
+        mOpenCvCameraView.enableView();
+      }
+    };
 
+    public final static Handler turnOffCameraView = new Handler() {
+      @Override
+      public void handleMessage(Message msg) {
+        mOpenCvCameraView.setVisibility(View.GONE);
+        mOpenCvCameraView.disableView();
+      }
+    };
   @Override
   public void onWindowFocusChanged(boolean hasFocus){
     super.onWindowFocusChanged(hasFocus);
